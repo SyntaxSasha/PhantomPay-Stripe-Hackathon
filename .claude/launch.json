@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "phantom-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "cwd": "server",
+      "port": 4242
+    },
+    {
+      "name": "phantom-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "web",
+      "port": 5173
+    }
+  ]
+}

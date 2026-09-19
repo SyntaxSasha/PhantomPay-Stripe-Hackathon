@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "project": {
+    "catalog": "prod",
+    "merchantId": "acct_1UHPyeC6Pb5YmIpn",
+    "merchantDisplayName": "University of Toronto",
+    "projectId": "project_61VQre6Y5VxW37X1z16VQnw0KYA86Kz8Y91GDg4o4TWS",
+    "projectName": "PhantomPay-Stripe-Hackathon",
+    "initializedAt": "2026-09-19T19:12:41.264Z"
+  },
+  "providers": {},
+  "resources": {}
+}

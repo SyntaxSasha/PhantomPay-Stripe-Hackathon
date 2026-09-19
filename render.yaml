@@ -1,0 +1,12 @@
+# One web service: the API builds the client and serves it from the same port.
+services:
+  - type: web
+    name: phantompay
+    runtime: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      # Set this in the dashboard — never commit a key.
+      - key: STRIPE_SECRET_KEY
+        sync: false
