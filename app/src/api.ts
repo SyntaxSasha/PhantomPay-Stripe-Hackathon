@@ -1,5 +1,12 @@
 import Constants from 'expo-constants';
-import type { Capabilities, CardSecret, Transaction, VirtualCard } from './types';
+import type {
+  BillingCycle,
+  Capabilities,
+  CardSecret,
+  Subscription,
+  Transaction,
+  VirtualCard,
+} from './types';
 
 /**
  * A phone on the same wifi cannot reach "localhost". Expo tells us the IP the packager
@@ -26,20 +33,44 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return body as T;
 }
 
-export const api = {
-  status: () => request<{ capabilities: Capabilities }>('/api/status'),
+interface AppState {
+  cards: VirtualCard[];
+  subscriptions: Subscription[];
+  transactions: Transaction[];
+  capabilities: Capabilities;
+}
 
-  listCards: () => request<{ cards: VirtualCard[]; capabilities: Capabilities }>('/api/cards'),
+export const CYCLES: BillingCycle[] = ['Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+
+export const api = {
+  /** Everything the app renders from — cards, subscriptions and capabilities in one call. */
+  state: () => request<AppState>('/api/state'),
 
   getCard: (id: string) => request<{ card: VirtualCard; transactions: Transaction[] }>(`/api/cards/${id}`),
 
-  createCard: (input: {
-    merchantName: string;
-    limitAmount: number;
-    interval: string;
-    expiresInDays: number | null;
-    merchantLocked: boolean;
-  }) => request<{ card: VirtualCard }>('/api/cards', { method: 'POST', body: JSON.stringify(input) }),
+  /** Cards belong to a person, not a merchant — a card has no merchant or limit until linked. */
+  createCard: (input: { cardHolder: string }) =>
+    request<{ card: VirtualCard }>('/api/cards', {
+      method: 'POST',
+      body: JSON.stringify({ cardHolder: input.cardHolder, cardType: 'Visa', isDefault: false }),
+    }),
+
+  createSubscription: (input: { name: string; price: number; billingCycle: BillingCycle }) =>
+    request<{ subscription: Subscription }>('/api/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...input,
+        description: '',
+        startDate: new Date().toISOString().slice(0, 10),
+      }),
+    }),
+
+  /** Binding a card to a subscription is what turns it into a merchant-specific credential. */
+  link: (subscriptionId: string, cardId: string | null) =>
+    request<{ subscription: Subscription; cards: VirtualCard[] }>(
+      `/api/subscriptions/${subscriptionId}/link`,
+      { method: 'POST', body: JSON.stringify({ cardId }) },
+    ),
 
   secret: (id: string) => request<{ secret: CardSecret }>(`/api/cards/${id}/secret`),
 
@@ -51,11 +82,12 @@ export const api = {
 
   deleteCard: (id: string) => request<{ ok: boolean }>(`/api/cards/${id}`, { method: 'DELETE' }),
 
-  charge: (id: string, amount: number, merchantName?: string) =>
-    request<{ approved: boolean; transaction: Transaction; card: VirtualCard }>(`/api/cards/${id}/charge`, {
-      method: 'POST',
-      body: JSON.stringify({ amount, merchantName }),
-    }),
+  /** Charges the subscription bound to a card. Omit amount to charge the plan's own price. */
+  charge: (subscriptionId: string, amount?: number) =>
+    request<{ approved: boolean; transaction: Transaction; card: VirtualCard; subscription: Subscription }>(
+      `/api/subscriptions/${subscriptionId}/charge`,
+      { method: 'POST', body: JSON.stringify({ amount }) },
+    ),
 };
 
 export const money = (cents: number) =>

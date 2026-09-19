@@ -1,12 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Logo } from './Logo';
 import { radius, space, theme } from '../theme';
-import type { CardSecret, VirtualCard } from '../types';
+import type { CardSecret, MerchantCard } from '../types';
 
 const group = (s: string) => s.replace(/(.{4})/g, '$1 ').trim();
 
 interface Props {
-  card: VirtualCard;
+  card: MerchantCard;
   secret?: CardSecret | null;
   revealed?: boolean;
 }

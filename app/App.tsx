@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, SafeAreaView, StatusBar, StyleSheet, View } from 'react-native';
 import { api } from './src/api';
 import { theme } from './src/theme';
@@ -7,7 +7,15 @@ import { CreateScreen } from './src/screens/CreateScreen';
 import { CardScreen } from './src/screens/CardScreen';
 import { ResultScreen } from './src/screens/ResultScreen';
 import { DeletedScreen } from './src/screens/DeletedScreen';
-import type { Capabilities, CardSecret, Transaction, VirtualCard } from './src/types';
+import type {
+  BillingCycle,
+  Capabilities,
+  CardSecret,
+  MerchantCard,
+  Subscription,
+  Transaction,
+  VirtualCard,
+} from './src/types';
 
 type Route =
   | { name: 'home' }
@@ -16,9 +24,13 @@ type Route =
   | { name: 'result'; transaction: Transaction; card: VirtualCard }
   | { name: 'deleted'; merchantName: string };
 
+/** The one implicit user this demo has — there is no auth, so every card is minted in this name. */
+const CARD_HOLDER = 'You';
+
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [cards, setCards] = useState<VirtualCard[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [secret, setSecret] = useState<CardSecret | null>(null);
@@ -49,9 +61,10 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const { cards: list, capabilities: caps } = await api.listCards();
-      setCards(list);
-      setCapabilities(caps);
+      const state = await api.state();
+      setCards(state.cards);
+      setSubscriptions(state.subscriptions);
+      setCapabilities(state.capabilities);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -62,7 +75,31 @@ export default function App() {
     refresh();
   }, [refresh]);
 
-  const openCard = useCallback(async (card: VirtualCard) => {
+  /**
+   * This app only ever shows a card once it is merchant-specific — a bare person
+   * card with no subscription linked has no merchant to render.
+   */
+  const merchantCards = useMemo<MerchantCard[]>(
+    () =>
+      cards
+        .filter((c) => c.status !== 'deleted' && c.linkedSubscriptionId && c.spendingLimit)
+        .flatMap((c) => {
+          const sub = subscriptions.find((s) => s.id === c.linkedSubscriptionId);
+          if (!sub || !c.spendingLimit) return [];
+          return [
+            {
+              ...c,
+              spendingLimit: c.spendingLimit,
+              merchantName: sub.name,
+              billingCycle: sub.billingCycle,
+              nextBillingDate: sub.nextBillingDate,
+            },
+          ];
+        }),
+    [cards, subscriptions],
+  );
+
+  const openCard = useCallback(async (card: MerchantCard) => {
     setSecret(null);
     setRevealed(false);
     setError(null);
@@ -75,13 +112,19 @@ export default function App() {
     }
   }, [go]);
 
-  const current = route.name === 'card' ? cards.find((c) => c.id === route.id) : undefined;
+  const current = route.name === 'card' ? merchantCards.find((c) => c.id === route.id) : undefined;
 
-  const handleCreate = async (input: Parameters<typeof api.createCard>[0]) => {
+  const handleCreate = async (input: { merchantName: string; limitAmount: number; billingCycle: BillingCycle }) => {
     setBusy(true);
     setError(null);
     try {
-      const { card } = await api.createCard(input);
+      const { card } = await api.createCard({ cardHolder: CARD_HOLDER });
+      const { subscription } = await api.createSubscription({
+        name: input.merchantName,
+        price: input.limitAmount,
+        billingCycle: input.billingCycle,
+      });
+      await api.link(subscription.id, card.id);
       await refresh();
       setTransactions([]);
       setSecret(null);
@@ -144,7 +187,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const { transaction, card } = await api.charge(current.id, 1499);
+      const { transaction, card } = await api.charge(current.linkedSubscriptionId!);
       await refresh();
       setTransactions((prev) => [transaction, ...prev]);
       go({ name: 'result', transaction, card });
@@ -162,7 +205,7 @@ export default function App() {
         <Animated.View style={[styles.root, { opacity: fade }]}>
           {route.name === 'home' && (
             <HomeScreen
-              cards={cards}
+              cards={merchantCards}
               capabilities={capabilities}
               error={error}
               onCreate={() => go({ name: 'create' })}

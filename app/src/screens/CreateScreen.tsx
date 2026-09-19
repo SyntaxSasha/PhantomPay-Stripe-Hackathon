@@ -5,37 +5,20 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { Button } from '../components/Button';
+import { CYCLES } from '../api';
 import { radius, space, theme } from '../theme';
-import type { LimitInterval } from '../types';
+import type { BillingCycle } from '../types';
 
 const QUICK = ['Netflix', 'Amazon', 'Adobe', 'Random website'];
 
-const INTERVALS: { label: string; value: LimitInterval }[] = [
-  { label: 'Per month', value: 'monthly' },
-  { label: 'One purchase', value: 'per_authorization' },
-];
-
-const EXPIRIES: { label: string; value: number | null }[] = [
-  { label: '30 days', value: 30 },
-  { label: '1 year', value: 365 },
-  { label: 'No expiry', value: null },
-];
-
 interface Props {
   onBack: () => void;
-  onCreate: (input: {
-    merchantName: string;
-    limitAmount: number;
-    interval: LimitInterval;
-    expiresInDays: number | null;
-    merchantLocked: boolean;
-  }) => void;
+  onCreate: (input: { merchantName: string; limitAmount: number; billingCycle: BillingCycle }) => void;
   busy: boolean;
   error: string | null;
 }
@@ -43,9 +26,7 @@ interface Props {
 export function CreateScreen({ onBack, onCreate, busy, error }: Props) {
   const [merchant, setMerchant] = useState('');
   const [limit, setLimit] = useState('20');
-  const [interval, setInterval] = useState<LimitInterval>('monthly');
-  const [expiry, setExpiry] = useState<number | null>(30);
-  const [locked, setLocked] = useState(true);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('Monthly');
   const [touched, setTouched] = useState(false);
 
   const amount = Math.round(parseFloat(limit.replace(/[^0-9.]/g, '')) * 100);
@@ -58,9 +39,7 @@ export function CreateScreen({ onBack, onCreate, busy, error }: Props) {
     onCreate({
       merchantName: merchant.trim(),
       limitAmount: amount,
-      interval,
-      expiresInDays: expiry,
-      merchantLocked: locked,
+      billingCycle,
     });
   };
 
@@ -117,42 +96,25 @@ export function CreateScreen({ onBack, onCreate, busy, error }: Props) {
         </View>
         {touched && !amountValid && <Text style={styles.error}>Enter an amount above zero</Text>}
 
+        <Text style={styles.label}>BILLING CYCLE</Text>
         <View style={styles.segment}>
-          {INTERVALS.map((opt) => (
+          {CYCLES.map((cycle) => (
             <Pressable
-              key={opt.value}
-              onPress={() => setInterval(opt.value)}
-              style={[styles.segmentItem, interval === opt.value && styles.segmentOn]}
+              key={cycle}
+              onPress={() => setBillingCycle(cycle)}
+              style={[styles.segmentItem, billingCycle === cycle && styles.segmentOn]}
             >
-              <Text style={[styles.segmentText, interval === opt.value && styles.segmentTextOn]}>{opt.label}</Text>
+              <Text style={[styles.segmentText, billingCycle === cycle && styles.segmentTextOn]}>{cycle}</Text>
             </Pressable>
           ))}
         </View>
 
-        <Text style={styles.label}>EXPIRATION</Text>
-        <View style={styles.segment}>
-          {EXPIRIES.map((opt) => (
-            <Pressable
-              key={opt.label}
-              onPress={() => setExpiry(opt.value)}
-              style={[styles.segmentItem, expiry === opt.value && styles.segmentOn]}
-            >
-              <Text style={[styles.segmentText, expiry === opt.value && styles.segmentTextOn]}>{opt.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={styles.switchRow}>
-          <View style={styles.flex}>
-            <Text style={styles.switchTitle}>Lock to this merchant</Text>
-            <Text style={styles.switchBody}>Any other merchant presenting this card is declined.</Text>
-          </View>
-          <Switch
-            value={locked}
-            onValueChange={setLocked}
-            trackColor={{ false: theme.hairline, true: theme.accentDim }}
-            thumbColor={locked ? theme.accent : theme.muted}
-          />
+        <View style={styles.noteRow}>
+          <Text style={styles.noteTitle}>Locked to this merchant</Text>
+          <Text style={styles.noteBody}>
+            Linking a card to a merchant is what makes it merchant-specific — any other merchant
+            presenting this card is declined.
+          </Text>
         </View>
 
         {error && <Text style={styles.error}>{error}</Text>}
@@ -220,13 +182,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   segmentOn: { borderColor: theme.accent, backgroundColor: theme.accentDim },
-  segmentText: { color: theme.secondary, fontSize: 14 },
+  segmentText: { color: theme.secondary, fontSize: 13 },
   segmentTextOn: { color: theme.accent, fontWeight: '600' },
 
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.md,
+  noteRow: {
     marginTop: space.xl,
     padding: space.md,
     backgroundColor: theme.surface,
@@ -234,6 +193,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.hairline,
   },
-  switchTitle: { color: theme.paper, fontSize: 15, fontWeight: '600' },
-  switchBody: { color: theme.muted, fontSize: 13, marginTop: 3, lineHeight: 18 },
+  noteTitle: { color: theme.paper, fontSize: 15, fontWeight: '600' },
+  noteBody: { color: theme.muted, fontSize: 13, marginTop: 3, lineHeight: 18 },
 });

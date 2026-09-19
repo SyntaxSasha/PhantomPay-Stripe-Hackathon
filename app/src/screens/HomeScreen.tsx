@@ -4,14 +4,14 @@ import { Logo } from '../components/Logo';
 import { Pill } from '../components/Pill';
 import { intervalLabel, money } from '../api';
 import { radius, space, theme } from '../theme';
-import type { Capabilities, VirtualCard } from '../types';
+import type { Capabilities, MerchantCard } from '../types';
 
 interface Props {
-  cards: VirtualCard[];
+  cards: MerchantCard[];
   capabilities: Capabilities | null;
   error: string | null;
   onCreate: () => void;
-  onOpen: (card: VirtualCard) => void;
+  onOpen: (card: MerchantCard) => void;
   onRetry: () => void;
 }
 

@@ -1,15 +1,29 @@
 export type Source = 'stripe' | 'simulated';
 export type CardStatus = 'active' | 'paused' | 'deleted';
+export type CardType = 'Visa' | 'Mastercard' | 'Amex';
 export type LimitInterval = 'per_authorization' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type BillingCycle = 'Weekly' | 'Monthly' | 'Quarterly' | 'Yearly';
 
+export interface SpendingLimit {
+  amount: number;
+  interval: LimitInterval;
+}
+
+/**
+ * A card belongs to a person, not to a merchant — it carries no merchant rule
+ * until a subscription is linked to it. Mirrors server/src/types.ts.
+ */
 export interface VirtualCard {
   id: string;
-  merchantName: string;
+  cardHolder: string;
+  cardType: CardType;
+  isDefault: boolean;
   stripeCardId: string | null;
   status: CardStatus;
-  spendingLimit: { amount: number; interval: LimitInterval };
-  expiresAt: string | null;
-  merchantLocked: boolean;
+  linkedSubscriptionId: string | null;
+  fundingCardId: string | null;
+  /** Mirrors the linked subscription's price. Null while unbound. */
+  spendingLimit: SpendingLimit | null;
   last4: string;
   expMonth: number;
   expYear: number;
@@ -17,6 +31,30 @@ export interface VirtualCard {
   spentThisPeriod: number;
   createdAt: string;
   source: Source;
+}
+
+export interface Subscription {
+  id: string;
+  name: string;
+  price: number;
+  billingCycle: BillingCycle;
+  status: 'Active' | 'Cancelled';
+  description: string;
+  startDate: string;
+  nextBillingDate: string;
+  virtualCardId: string | null;
+  createdAt: string;
+}
+
+/**
+ * A card merged with the subscription it is bound to — this app only ever shows
+ * linked cards, so every screen renders this shape rather than a bare VirtualCard.
+ */
+export interface MerchantCard extends VirtualCard {
+  spendingLimit: SpendingLimit;
+  merchantName: string;
+  billingCycle: BillingCycle;
+  nextBillingDate: string;
 }
 
 export interface Transaction {

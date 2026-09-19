@@ -5,10 +5,10 @@ import { PhantomCard } from '../components/PhantomCard';
 import { Pill } from '../components/Pill';
 import { intervalLabel, money } from '../api';
 import { radius, space, theme } from '../theme';
-import type { CardSecret, Transaction, VirtualCard } from '../types';
+import type { CardSecret, MerchantCard, Transaction } from '../types';
 
 interface Props {
-  card: VirtualCard;
+  card: MerchantCard;
   transactions: Transaction[];
   secret: CardSecret | null;
   revealed: boolean;
@@ -70,13 +70,10 @@ export function CardScreen(props: Props) {
         </View>
 
         <View style={styles.facts}>
+          <Fact label="Merchant lock" value={`Only ${card.merchantName}`} />
           <Fact
-            label="Merchant lock"
-            value={card.merchantLocked ? `Only ${card.merchantName}` : 'Any merchant'}
-          />
-          <Fact
-            label="Expires"
-            value={card.expiresAt ? new Date(card.expiresAt).toLocaleDateString() : 'No expiry'}
+            label="Next billing"
+            value={`${card.billingCycle} · ${new Date(card.nextBillingDate).toLocaleDateString()}`}
           />
           <Fact
             label="Issued by"
