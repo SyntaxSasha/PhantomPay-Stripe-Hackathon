@@ -2,6 +2,8 @@
 
 **Your real card stays yours. PhantomPay gives every subscription a different one.**
 
+RUN ON: https://phantom-pay-stripe-hackathon-14dmbj1rt.vercel.app/
+
 Mint a virtual card in your own name through Stripe Issuing, then bind it to one subscription.
 That binding is what makes it merchant-specific: it takes the plan's price as its spending limit
 and refuses every other merchant. Product brief and rules of engagement are in
