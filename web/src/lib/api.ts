@@ -1,33 +1,7 @@
-import type {
-  AppState,
-  FraudAlert,
-  PhysicalCard,
-  BillingCycle,
-  CardSecret,
-  CardType,
-  ChargeResult,
-  Subscription,
-  VirtualCard,
-} from '../types';
+import * as db from './localdb';
+import type { AppState, BillingCycle, CardType, ChargeResult } from '../types';
 
-/**
- * Vite proxies /api to the Phantom server (see vite.config.ts), so the app has a
- * single origin. Point VITE_API_URL at the server directly to bypass the proxy.
- */
-const BASE = import.meta.env.VITE_API_URL ?? '';
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: init?.body ? { 'content-type': 'application/json' } : undefined,
-  });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new Error(body?.error ?? `${res.status} ${res.statusText}`);
-  }
-  return res.json() as Promise<T>;
-}
+export const storageNotice = () => db.storageNotice();
 
 export interface CreateCardInput {
   cardHolder: string;
@@ -51,70 +25,90 @@ export interface CreateSubscriptionInput {
   startDate: string;
 }
 
+/**
+ * PhantomPay runs entirely in this browser — there is no server. Every call
+ * below reads or writes localStorage synchronously; the `async` wrapper only
+ * keeps the same Promise-based interface the rest of the app already expects.
+ */
 export const api = {
-  state: () => request<AppState>('/api/state'),
+  state: async (): Promise<AppState> => db.state(),
 
-  createCard: (input: CreateCardInput) =>
-    request<{ card: VirtualCard }>('/api/cards', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  createCard: async (input: CreateCardInput) => ({ card: db.createCard(input) }),
 
-  reveal: (id: string) => request<{ secret: CardSecret }>(`/api/cards/${id}/secret`),
+  reveal: async (id: string) => {
+    const card = db.readCard(id);
+    if (!card) throw new Error('No such card');
+    if (card.status === 'deleted') throw new Error('Card deleted');
+    return { secret: db.revealCard(card) };
+  },
 
-  setCardStatus: (id: string, status: 'active' | 'paused') =>
-    request<{ card: VirtualCard }>(`/api/cards/${id}/status`, {
-      method: 'POST',
-      body: JSON.stringify({ status }),
-    }),
+  setCardStatus: async (id: string, status: 'active' | 'paused') => {
+    const card = db.readCard(id);
+    if (!card) throw new Error('No such card');
+    return { card: db.setCardStatus(card, status) };
+  },
 
-  makeDefault: (id: string) =>
-    request<{ cards: VirtualCard[] }>(`/api/cards/${id}/default`, { method: 'POST' }),
+  makeDefault: async (id: string) => {
+    const card = db.readCard(id);
+    if (!card) throw new Error('No such card');
+    return { cards: db.makeDefault(card) };
+  },
 
-  deleteCard: (id: string) => request<{ ok: true }>(`/api/cards/${id}`, { method: 'DELETE' }),
+  deleteCard: async (id: string) => {
+    const card = db.readCard(id);
+    if (!card) throw new Error('No such card');
+    return { ok: true as const, ...db.deleteCard(card) };
+  },
 
-  createSubscription: (input: CreateSubscriptionInput) =>
-    request<{ subscription: Subscription }>('/api/subscriptions', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  createSubscription: async (input: CreateSubscriptionInput) => ({
+    subscription: db.createSubscription(input),
+  }),
 
-  deleteSubscription: (id: string) =>
-    request<{ ok: true }>(`/api/subscriptions/${id}`, { method: 'DELETE' }),
+  deleteSubscription: async (id: string) => {
+    const sub = db.readSubscription(id);
+    if (!sub) throw new Error('No such subscription');
+    db.deleteSubscription(sub);
+    return { ok: true as const };
+  },
 
   /** cardId null unbinds whatever is currently attached. */
-  link: (subscriptionId: string, cardId: string | null) =>
-    request<{ subscription: Subscription; cards: VirtualCard[] }>(
-      `/api/subscriptions/${subscriptionId}/link`,
-      { method: 'POST', body: JSON.stringify({ cardId }) },
-    ),
+  link: async (subscriptionId: string, cardId: string | null) => {
+    const sub = db.readSubscription(subscriptionId);
+    if (!sub) throw new Error('No such subscription');
 
-  charge: (subscriptionId: string, amount?: number) =>
-    request<ChargeResult>(`/api/subscriptions/${subscriptionId}/charge`, {
-      method: 'POST',
-      body: JSON.stringify({ amount }),
-    }),
+    if (cardId === null) return db.unlinkCard(subscriptionId);
+
+    const card = db.readCard(cardId);
+    if (!card) throw new Error('No such card');
+    if (card.status === 'deleted') throw new Error('Card deleted');
+    return db.linkCard(card, sub);
+  },
+
+  charge: async (subscriptionId: string, amount?: number): Promise<ChargeResult> => {
+    const sub = db.readSubscription(subscriptionId);
+    if (!sub) throw new Error('No such subscription');
+    return db.charge(sub, amount);
+  },
 
   /** physicalCardId null detaches the funding source. */
-  setFunding: (cardId: string, physicalCardId: string | null) =>
-    request<{ card: VirtualCard }>(`/api/cards/${cardId}/funding`, {
-      method: 'POST',
-      body: JSON.stringify({ physicalCardId }),
-    }),
+  setFunding: async (cardId: string, physicalCardId: string | null) => {
+    const card = db.readCard(cardId);
+    if (!card) throw new Error('No such card');
+    return { card: db.setFunding(card, physicalCardId) };
+  },
 
-  addPhysicalCard: (input: AddPhysicalCardInput) =>
-    request<{ physicalCard: PhysicalCard }>('/api/physical-cards', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  addPhysicalCard: async (input: AddPhysicalCardInput) => ({
+    physicalCard: db.addPhysicalCard(input),
+  }),
 
-  removePhysicalCard: (id: string) =>
-    request<{ ok: true }>(`/api/physical-cards/${id}`, { method: 'DELETE' }),
+  removePhysicalCard: async (id: string) => ({ ok: true as const, ...db.removePhysicalCard(id) }),
 
-  alerts: () => request<{ alerts: FraudAlert[] }>('/api/alerts'),
+  alerts: async () => ({ alerts: db.listAlerts() }),
 
-  resolveAlert: (id: string) =>
-    request<{ alerts: FraudAlert[] }>(`/api/alerts/${id}/resolve`, { method: 'POST' }),
+  resolveAlert: async (id: string) => ({ alerts: db.resolveAlert(id) }),
 
-  reset: () => request<{ ok: true }>('/api/reset', { method: 'POST' }),
+  reset: async () => {
+    db.reset();
+    return { ok: true as const };
+  },
 };

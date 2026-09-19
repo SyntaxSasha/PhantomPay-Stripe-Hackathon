@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
   api,
+  storageNotice,
   type AddPhysicalCardInput,
   type CreateCardInput,
   type CreateSubscriptionInput,
@@ -73,13 +74,9 @@ export function PhantomProvider({ children }: { children: ReactNode }) {
       setAlerts(state.alerts ?? []);
       setPhysicalCards(state.physicalCards ?? []);
       setCapabilities(state.capabilities);
-      setError(null);
+      setError(storageNotice() || null);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? `${err.message} — is the Phantom API running on :4242?`
-          : 'Could not reach the Phantom API',
-      );
+      setError(err instanceof Error ? err.message : 'Could not load Phantom data');
     } finally {
       setLoading(false);
     }
