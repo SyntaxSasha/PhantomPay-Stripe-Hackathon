@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 import type {
   FraudAlert,
   PhysicalCard,
@@ -55,6 +56,81 @@ const EMPTY: Db = {
   alerts: [],
 };
 
+/** Normalises whatever came back from disk or Postgres into a complete Db. */
+function hydrate(parsed: Partial<Db>): Db {
+  return {
+    // Older records predate subscriptions and funding cards; fill the gaps rather
+    // than crashing, and normalise absent fields to null instead of undefined.
+    cards: (parsed.cards ?? []).map((c) => ({ ...c, fundingCardId: c.fundingCardId ?? null })),
+    subscriptions: parsed.subscriptions ?? [],
+    transactions: parsed.transactions ?? [],
+    alerts: parsed.alerts ?? [],
+    physicalCards:
+      parsed.physicalCards && parsed.physicalCards.length > 0
+        ? parsed.physicalCards
+        : defaultWallet(),
+  };
+}
+
+/* ------------------------------------------------------------------ Postgres
+ * Serverless has no writable disk, so when a connection string is present the
+ * whole Db lives in one JSONB row. That keeps every accessor below synchronous —
+ * only load and persist change. Writes are last-one-wins, which is fine for a
+ * demo and would not be for real money.
+ */
+
+const connectionString = process.env.NEON_POSTGRES_CONNECTION_STRING ?? process.env.DATABASE_URL;
+
+export const usingPostgres = !!connectionString;
+
+const pool = connectionString
+  ? new pg.Pool({ connectionString, ssl: { rejectUnauthorized: false }, max: 3 })
+  : null;
+
+async function readFromPostgres(): Promise<Db> {
+  if (!pool) return hydrate({});
+  await pool.query('CREATE TABLE IF NOT EXISTS phantom_state (id int PRIMARY KEY, doc jsonb NOT NULL)');
+  const { rows } = await pool.query<{ doc: Partial<Db> }>(
+    'SELECT doc FROM phantom_state WHERE id = 1',
+  );
+  return hydrate(rows[0]?.doc ?? {});
+}
+
+/**
+ * Writes are chained rather than fired in parallel, and a read always waits for
+ * the outstanding write. Without this a refresh can overtake an unfinished
+ * persist and resurrect stale state.
+ */
+let pendingWrite: Promise<void> = Promise.resolve();
+
+function queueWrite(): Promise<void> {
+  if (!pool) return Promise.resolve();
+  pendingWrite = pendingWrite
+    .catch(() => {})
+    .then(() =>
+      pool.query(
+        `INSERT INTO phantom_state (id, doc) VALUES (1, $1::jsonb)
+         ON CONFLICT (id) DO UPDATE SET doc = EXCLUDED.doc`,
+        [JSON.stringify(db)],
+      ),
+    )
+    .then(() => undefined);
+  return pendingWrite;
+}
+
+/** Pulls the latest state in. Call before serving a request in serverless. */
+export async function refreshStore(): Promise<void> {
+  if (!pool) return;
+  await pendingWrite.catch(() => {});
+  Object.assign(db, await readFromPostgres());
+}
+
+/** Run once at boot, before anything reads the store. */
+export async function initStore(): Promise<void> {
+  if (!pool) return;
+  Object.assign(db, await readFromPostgres());
+}
+
 function load(): Db {
   if (!existsSync(file)) return { ...EMPTY, physicalCards: defaultWallet() };
   try {
@@ -79,6 +155,10 @@ function load(): Db {
 const db = load();
 
 function persist() {
+  if (pool) {
+    void queueWrite().catch((err) => console.error('[phantom] persist failed', err));
+    return;
+  }
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, JSON.stringify(db, null, 2));
 }

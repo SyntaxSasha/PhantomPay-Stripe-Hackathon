@@ -2,12 +2,80 @@
   "version": 1,
   "project": {
     "catalog": "prod",
-    "merchantId": "acct_1UHPyeC6Pb5YmIpn",
+    "initializedAt": "2026-09-19T19:12:41.264Z",
     "merchantDisplayName": "University of Toronto",
+    "merchantId": "acct_1UHPyeC6Pb5YmIpn",
     "projectId": "project_61VQre6Y5VxW37X1z16VQnw0KYA86Kz8Y91GDg4o4TWS",
-    "projectName": "PhantomPay-Stripe-Hackathon",
-    "initializedAt": "2026-09-19T19:12:41.264Z"
+    "projectName": "PhantomPay-Stripe-Hackathon"
   },
-  "providers": {},
-  "resources": {}
+  "providers": {
+    "neon": {
+      "accountRequestId": "facctrq_61VQrpdFI7Oo02U8h16VQnw0KYA86Kz8Y91GDg4o4Qeu",
+      "configuration": {},
+      "linkedAt": "2026-09-19T19:24:37.353Z",
+      "providerId": "prvdr_61UH8uNXFdoJUJOtT54AC",
+      "providerName": "Neon",
+      "redirectUrl": null,
+      "requestedAt": "2026-09-19T19:24:37.353Z",
+      "status": "complete"
+    },
+    "vercel": {
+      "accountRequestId": "facctrq_61VQs0Ugm3TyJiNRg16VQnw0KYA86Kz8Y91GDg4o43yq",
+      "configuration": {},
+      "linkedAt": "2026-09-19T19:35:53.215Z",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "redirectUrl": null,
+      "requestedAt": "2026-09-19T19:35:53.214Z",
+      "status": "complete"
+    }
+  },
+  "resources": {
+    "neon-plan": {
+      "configuration": {},
+      "createdAt": "2026-09-19T19:24:38.765Z",
+      "lastRevealedAt": "2026-09-19T19:24:38.992Z",
+      "lastStatus": "complete",
+      "name": "neon-plan",
+      "providerId": "prvdr_61UH8uNXFdoJUJOtT54AC",
+      "providerName": "Neon",
+      "resourceId": "fres_61VQrpen4i2gIS2cl16VQnw0KYA86Kz8Y91GDg4o47Oi",
+      "serviceId": "free"
+    },
+    "neon-postgres": {
+      "configuration": {},
+      "createdAt": "2026-09-19T19:24:56.771Z",
+      "lastRevealedAt": "2026-09-19T19:24:57.030Z",
+      "lastStatus": "complete",
+      "name": "neon-postgres",
+      "providerId": "prvdr_61UH8uNXFdoJUJOtT54AC",
+      "providerName": "Neon",
+      "resourceId": "fres_61VQrpw1Kl8fHfRcX16VQnw0KYA86Kz8Y91GDg4o4C8O",
+      "serviceId": "postgres"
+    },
+    "vercel-plan": {
+      "configuration": {},
+      "createdAt": "2026-09-19T19:35:55.663Z",
+      "lastRevealedAt": "2026-09-19T19:35:55.975Z",
+      "lastStatus": "complete",
+      "name": "vercel-plan",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61VQs0YbcgImxdqdz16VQnw0KYA86Kz8Y91GDg4o4AC0",
+      "serviceId": "hobby"
+    },
+    "vercel-project": {
+      "configuration": {
+        "name": "PhantomPay-Stripe-Hackathon"
+      },
+      "createdAt": "2026-09-19T19:36:06.758Z",
+      "lastRevealedAt": "2026-09-19T19:36:07.096Z",
+      "lastStatus": "complete",
+      "name": "vercel-project",
+      "providerId": "prvdr_61ULUAr4zlQgZkvXY5LsG",
+      "providerName": "Vercel",
+      "resourceId": "fres_61VQs0jtOMuhh0v8f16VQnw0KYA86Kz8Y91GDg4o43dg",
+      "serviceId": "project"
+    }
+  }
 }

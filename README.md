@@ -52,6 +52,71 @@ Then open http://localhost:5173. Vite proxies `/api` to the server on :4242, so 
 origin and no CORS to think about; point `PHANTOM_API` at a different target to override, or set
 `VITE_API_URL` to skip the proxy entirely.
 
+## Built with the Stripe CLI
+
+The whole backing stack was provisioned through `stripe projects` rather than by signing up to
+providers by hand. Every command below was actually run against this repo.
+
+**Set up the CLI and the agent skills.**
+
+```bash
+npm install -g @stripe/cli          # v1.51.0
+npx skills add https://docs.stripe.com
+stripe projects --help              # installs the projects plugin on first use
+```
+
+**Register the project.** This writes `.projects/`, updates `.gitignore`, and drops agent
+guidance into `AGENTS.md` and `.claude/`.
+
+```bash
+stripe projects init --yes
+```
+
+Two things that bite on Windows: the npm shim is `stripe.ps1`, which PowerShell refuses to run
+under the default execution policy — call `stripe.cmd` instead of loosening the policy. And `init`
+needs a browser for OAuth, so it cannot be run headlessly.
+
+**Provision the stack.** Each provider needs its plan before its resource.
+
+```bash
+stripe projects catalog                          # 90 services, 63 providers
+stripe projects add neon/free    --accept-tos --yes
+stripe projects add neon/postgres --yes
+stripe projects add vercel/hobby --accept-tos --yes
+stripe projects add vercel/project --yes
+stripe projects status
+```
+
+The CLI provisions the resource, then syncs its credentials straight into the repo-root `.env`:
+`NEON_POSTGRES_CONNECTION_STRING`, `VERCEL_TOKEN`, `VERCEL_PROJECT_ID` and the rest. Nothing was
+copied out of a provider dashboard.
+
+That `.env` is why [server/src/env.ts](server/src/env.ts) exists — it loads `server/.env` *and* the
+repo-root one, and it has to be the first import in the process because ES imports are hoisted and
+[stripe.ts](server/src/stripe.ts) reads `process.env` at module scope.
+
+**Share it.**
+
+```bash
+stripe projects share
+# https://projects.dev/s#v1:Neon~postgres,Vercel~project
+```
+
+A plan on its own is not shareable — `share` answers `EMPTY_STACK` until an actual resource
+exists. Note there is no `stripe projects deploy`: the CLI provisions the Vercel project and hands
+you a `VERCEL_TOKEN`, but pushing code is still the Vercel CLI's job.
+
+### What the Neon database actually does
+
+`stripe projects add neon/postgres` is not decoration. [store.ts](server/src/store.ts) keeps the
+whole dataset in one JSONB row and reads it back on every API request, because serverless has no
+writable disk and no instance affinity. With no connection string present it falls back to a local
+JSON file, so `npm start` works on a laptop with nothing provisioned.
+
+Writes are chained and a read waits on the outstanding write — without that, the per-request
+refresh overtakes an unfinished persist and resurrects stale state. The `e2e` suite caught exactly
+that: 23/25 before the fix, 25/25 after.
+
 ## Deploy
 
 The API serves the built client from the same port when `web/dist` exists, so the whole thing is
@@ -68,10 +133,10 @@ it.
 
 Two things to know before pointing voters at it:
 
-- **State is a JSON file and it is shared.** Every visitor sees and mutates the same cards and
-  subscriptions, and most hosts wipe the filesystem on redeploy. Fine for a demo people click
-  through; not fine if you expect dozens of concurrent voters. The **Reset** button in the nav
-  puts it back.
+- **State is shared.** With `NEON_POSTGRES_CONNECTION_STRING` set it lives in Neon and survives
+  restarts; without it, in a local JSON file. Either way every visitor sees and mutates the same
+  cards and subscriptions. Fine for a demo people click through; last-write-wins if several
+  people act at once. The **Reset** button in the nav puts it back.
 - **No auth.** Anything a visitor can reach, they can change.
 
 ## Stripe
@@ -229,26 +294,25 @@ enforcement is real and lives in `evaluate()` — the scoring model is not built
 
 ## Leaderboard
 
-Submission needs two things, and the first is not something the CLI can do headlessly:
+Submission needs `init` then `share`, and `init` is not something the CLI can do headlessly —
+it answers *"A person has to run `stripe projects init` in a terminal with browser access to
+finish authenticating Projects"*, because Projects cannot read live-mode credentials from an API
+key alone.
 
-```bash
-stripe projects init     # must be run by a person, in a terminal with browser access
-stripe projects share    # refuses until init has completed
-```
+Submitted:
 
-`stripe projects share` currently answers *"Get started by running stripe projects init"*, and
-init answers *"A person has to run `stripe projects init` in a terminal with browser access to
-finish authenticating Projects"* — Projects cannot read live-mode credentials from an API key
-alone.
+- **Share link** `https://projects.dev/s#v1:Neon~postgres,Vercel~project`
+- **Account ID** `acct_1UHPyeC6Pb5YmIpn` — University of Toronto, the merchant the Projects
+  project is registered to (see `.projects/state.local.json`)
+- **Repo** https://github.com/SyntaxSasha/PhantomPay-Stripe-Hackathon
 
-Account ID for the submission: **`acct_1UHPysCAxcMok9WF`** (CA, standard). `stripe whoami` prints
-profile info rather than the id when passed `--api-key`; the id above came from
-`stripe.accounts.retrieve()`.
+`stripe whoami` prints profile and device info rather than the account id when passed
+`--api-key`; the id above came from `.projects/state.local.json`.
 
 ## Known gaps
 
-- **Not deployed yet.** The leaderboard wants a URL others can open and vote on; everything here
-  still runs on localhost. See **Deploy** above.
+- **Not deployed yet.** The Vercel project is provisioned and the app is serverless-ready, but no
+  code has been pushed to it. Until then the demo runs from a laptop on the local network.
 - **Issuing is not enabled on the account yet**, so cards are generated locally until it is
   switched on in the dashboard. The UI does not say so; you should, if asked.
 - The scenario alerts are illustrative demo content, not real detections — see above.

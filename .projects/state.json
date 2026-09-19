@@ -1,5 +1,33 @@
 {
   "version": 1,
-  "providers": {},
-  "resources": {}
+  "providers": {
+    "neon": {
+      "name": "Neon"
+    },
+    "vercel": {
+      "name": "Vercel"
+    }
+  },
+  "resources": {
+    "neon-plan": {
+      "name": "neon-plan",
+      "providerName": "Neon",
+      "serviceId": "free"
+    },
+    "neon-postgres": {
+      "name": "neon-postgres",
+      "providerName": "Neon",
+      "serviceId": "postgres"
+    },
+    "vercel-plan": {
+      "name": "vercel-plan",
+      "providerName": "Vercel",
+      "serviceId": "hobby"
+    },
+    "vercel-project": {
+      "name": "vercel-project",
+      "providerName": "Vercel",
+      "serviceId": "project"
+    }
+  }
 }

@@ -1,12 +1,13 @@
-import 'dotenv/config';
+import './env.js';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { networkInterfaces } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
 import { probeCapabilities, stripe } from './stripe.js';
-import { store } from './store.js';
+import { initStore, refreshStore, store, usingPostgres } from './store.js';
 import { listAlerts } from './alerts.js';
 import {
   charge,
@@ -19,9 +20,18 @@ import {
 } from './cards.js';
 import type { BillingCycle, Capabilities, CardType } from './types.js';
 
-const app = express();
+export const app = express();
 app.use(cors());
 app.use(express.json());
+
+/**
+ * Serverless invocations do not share memory, so the in-memory copy has to be
+ * pulled fresh before each API request. Locally this is a no-op.
+ */
+app.use('/api', (_req, _res, next) => {
+  if (!usingPostgres) return next();
+  refreshStore().then(() => next(), next);
+});
 
 let caps: Capabilities;
 
@@ -378,12 +388,38 @@ if (existsSync(clientDist)) {
 
 const port = Number(process.env.PORT ?? 4242);
 
-probeCapabilities().then((probed) => {
-  caps = probed;
-  app.listen(port, () => {
-    console.log(`\n  Phantom API on http://localhost:${port}`);
-    console.log(`  mode: ${caps.mode}`);
-    for (const note of caps.notes) console.log(`  - ${note}`);
-    console.log('');
+/** Every non-internal IPv4 this machine answers on, so the LAN URL is easy to share. */
+function lanAddresses(): string[] {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter((n): n is NonNullable<typeof n> => !!n && n.family === 'IPv4' && !n.internal)
+    .map((n) => n.address);
+}
+
+/** Boot once: probe Stripe and pull the store in. Awaited by every entry point. */
+export const ready = (async () => {
+  caps = await probeCapabilities();
+  await initStore();
+  return caps;
+})();
+
+// On Vercel the platform owns the listener; only bind a port when running standalone.
+if (!process.env.VERCEL) {
+  void ready.then(() => {
+    // 0.0.0.0 rather than localhost: other machines on the network need to reach this.
+    app.listen(port, '0.0.0.0', () => {
+      console.log('');
+      console.log(`  PhantomPay on port ${port}`);
+      console.log(`    local     http://localhost:${port}`);
+      for (const address of lanAddresses()) {
+        console.log(`    network   http://${address}:${port}`);
+      }
+      console.log('');
+      console.log(`  mode: ${caps.mode}   store: ${usingPostgres ? 'postgres' : 'file'}`);
+      for (const note of caps.notes) console.log(`  - ${note}`);
+      console.log('');
+    });
   });
-});
+}
+
+export default app;
